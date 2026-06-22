@@ -1,0 +1,250 @@
+﻿<Window x:Class="ClipForgeWpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        Title="ClipForge" Width="1620" Height="900" MinWidth="1120" MinHeight="650"
+        Icon="Assets/clipforge.ico"
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
+        PreviewDrop="Window_PreviewDrop" PreviewDragOver="Window_PreviewDragOver"
+        Background="#F3F5F8" KeyDown="Window_KeyDown">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Background" Value="#EEF2F6"/>
+            <Setter Property="BorderBrush" Value="#C8D2DE"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="5,1"/>
+        </Style>
+        <Style TargetType="ProgressBar">
+            <Setter Property="Foreground" Value="#FF8708"/>
+            <Setter Property="Background" Value="#E8EDF3"/>
+            <Setter Property="BorderBrush" Value="#D5DEE8"/>
+        </Style>
+        <Style TargetType="ListView">
+            <Setter Property="BorderBrush" Value="#C8D2DE"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="14">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1.12*"/>
+            <ColumnDefinition Width="0.92*"/>
+            <ColumnDefinition Width="1.08*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Margin="0,0,10,0" Padding="18" Background="White" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <DockPanel>
+                    <TextBlock Text="Original Video" FontSize="24" FontWeight="Bold" DockPanel.Dock="Left"/>
+                    <Button Content="Clear Cache" Width="120" Height="38" DockPanel.Dock="Right" Click="ClearCache_Click"/>
+                </DockPanel>
+                <Border x:Name="VideoHost" Grid.Row="1" Margin="0,14,0,0" Background="#111822" BorderBrush="#CBD5DF" BorderThickness="1" CornerRadius="6" AllowDrop="True" Drop="Video_Drop" DragOver="Window_DragOver">
+                    <Grid>
+                        <Image x:Name="SourceStillImage" Stretch="Uniform" AllowDrop="True" Drop="Video_Drop" DragOver="Window_DragOver"/>
+                        <vlc:VideoView x:Name="VideoView" Visibility="Collapsed" IsHitTestVisible="False" Focusable="False"/>
+                        <TextBlock x:Name="EmptyVideoText" Text="Drop a video file here" Foreground="#DDE6F1" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border Background="#01000000" AllowDrop="True" Drop="Video_Drop" DragOver="Window_DragOver"/>
+                        <Popup x:Name="VideoDropPopup" PlacementTarget="{Binding ElementName=VideoHost}" Placement="Relative" HorizontalOffset="0" VerticalOffset="0" AllowsTransparency="True" StaysOpen="True" IsOpen="True" Focusable="False">
+                            <Border Width="{Binding ActualWidth, ElementName=VideoHost}" Height="{Binding ActualHeight, ElementName=VideoHost}" Background="#01000000" AllowDrop="True" Drop="Video_Drop" DragOver="Window_DragOver"/>
+                        </Popup>
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="MetaText" Grid.Row="2" Margin="0,10,0,0" Foreground="#6F7B8B" FontWeight="SemiBold" Text="-"/>
+                <Grid Grid.Row="3" Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="StartText" Text="00:00.000" FontFamily="Consolas"/>
+                    <TextBlock x:Name="CurrentText" Grid.Column="1" Text="00:00.000" FontFamily="Consolas" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="EndText" Grid.Column="2" Text="00:00.000" FontFamily="Consolas" HorizontalAlignment="Right"/>
+                </Grid>
+                <Grid Grid.Row="4" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="MuteButton" Width="28" Height="28" Padding="4" Click="Mute_Click" ToolTip="Mute">
+                        <Viewbox Stretch="Uniform">
+                            <Canvas Width="24" Height="24">
+                                <Path Fill="#1F2937" Data="M3,9 L7,9 L13,4 L13,20 L7,15 L3,15 Z"/>
+                                <Path Stroke="#1F2937" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M16,8 C18,10 18,14 16,16"/>
+                                <Path x:Name="MuteSlash" Stroke="#E11D48" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M4,4 L20,20"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+                    <Slider x:Name="Timeline" Grid.Column="1" Margin="6,0,0,0" Minimum="0" Maximum="1" ValueChanged="Timeline_ValueChanged"/>
+                </Grid>
+                <UniformGrid Grid.Row="5" Columns="7" Margin="0,16,0,0">
+                    <Button Content="-5s" Click="Back5_Click"/>
+                    <Button Content="-1s" Click="Back1_Click"/>
+                    <Button Content="Prev Frame" Click="PrevFrame_Click"/>
+                    <Button Content="Play/Pause" Click="PlayPause_Click"/>
+                    <Button Content="Next Frame" Click="NextFrame_Click"/>
+                    <Button Content="+1s" Click="Forward1_Click"/>
+                    <Button Content="+5s" Click="Forward5_Click"/>
+                </UniformGrid>
+                <StackPanel Grid.Row="6" Margin="0,16,0,0">
+                    <UniformGrid Columns="2">
+                        <Button Content="Set Start" Height="42" Click="SetStart_Click"/>
+                        <Button Content="Set End" Height="42" Click="SetEnd_Click"/>
+                    </UniformGrid>
+                    <Border Margin="0,18,0,0" Padding="16" Background="#F6F8FB" CornerRadius="10">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock x:Name="SegmentText" Text="Segment: -" FontSize="17" FontWeight="Bold" TextAlignment="Center"/>
+                            <UniformGrid Columns="2" Margin="0,12,0,0" Width="260">
+                                <Button Content="+ Extract Frames" Height="46" Background="#FF8708" Foreground="White" FontWeight="Bold" Click="Extract_Click"/>
+                                <Button Content="Stop" Height="46" Background="#2F3542" Foreground="White" FontWeight="Bold" Click="StopExtract_Click"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Margin="10,0" Padding="18" Background="White" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock Text="Extracted Frames" FontSize="24" FontWeight="Bold"/>
+                        <TextBlock x:Name="StatusText" Text="Status: idle" Foreground="#596579" FontWeight="Bold" HorizontalAlignment="Right"/>
+                    </DockPanel>
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ProgressBar x:Name="ExtractProgress" Height="12" Minimum="0" Maximum="100" Value="0"/>
+                        <TextBlock x:Name="ProgressText" Grid.Column="1" Text="-" Margin="10,0,0,0" Foreground="#596579" FontFamily="Consolas" VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+                <ListView x:Name="FrameList" Grid.Row="1" Margin="0,14,0,0" SelectionMode="Extended" SelectionChanged="FrameList_SelectionChanged">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="#" DisplayMemberBinding="{Binding Index}" Width="52"/>
+                            <GridViewColumn Header="Thumb" Width="86">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate><Image Source="{Binding Thumbnail}" Width="68" Height="52" Stretch="Uniform"/></DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Time" DisplayMemberBinding="{Binding TimeText}" Width="88"/>
+                            <GridViewColumn Header="Duration" DisplayMemberBinding="{Binding DurationText}" Width="86"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+                <UniformGrid Grid.Row="2" Columns="2" Margin="0,14,0,0">
+                    <Button Content="Select/Unselect All" Height="42" Click="ToggleSelect_Click"/>
+                    <Button Content="Change Duration" Height="42" Click="Duration_Click"/>
+                    <Button Content="Delete Selected" Height="42" Click="DeleteSelected_Click"/>
+                    <Button Content="Delete All" Height="42" Click="ClearFrames_Click"/>
+                </UniformGrid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Column="2" Margin="10,0,0,0" Padding="18" Background="White" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*" MinHeight="300"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Result Preview" FontSize="24" FontWeight="Bold"/>
+                <Border Grid.Row="1" Margin="0,14,0,0" Background="#111822" CornerRadius="6">
+                    <Image x:Name="ResultImage" Stretch="Uniform"/>
+                </Border>
+                <Button Grid.Row="2" Content="Preview Play/Pause" Margin="0,10,0,0" Click="PreviewPlay_Click"/>
+                <StackPanel Grid.Row="3" Margin="0,10,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.08*"/>
+                            <ColumnDefinition Width="1*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Padding="10" Background="#F7F9FC" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="6">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Crop" VerticalAlignment="Center" Foreground="#526174" FontSize="12"/>
+                                    <UniformGrid Grid.Column="1" Columns="2">
+                                        <Button Content="Crop" Click="Crop_Click"/>
+                                        <Button Content="Reset" Click="ResetCrop_Click"/>
+                                    </UniformGrid>
+                                </Grid>
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Resolution" VerticalAlignment="Center" Foreground="#526174" FontSize="12"/>
+                                    <ComboBox x:Name="ResolutionBox" Grid.Column="1" SelectedIndex="0" SelectionChanged="OutputSettings_Changed">
+                                        <ComboBoxItem Content="Source"/>
+                                        <ComboBoxItem Content="256"/>
+                                        <ComboBoxItem Content="512"/>
+                                        <ComboBoxItem Content="720"/>
+                                        <ComboBoxItem Content="1080"/>
+                                    </ComboBox>
+                                </Grid>
+                                <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                    <TextBlock Text="Loop" VerticalAlignment="Center" Foreground="#526174" FontSize="12"/>
+                                    <TextBox x:Name="LoopText" Text="0" Width="56" Margin="7,0,0,0"/>
+                                    <TextBlock Text="Quality" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#526174" FontSize="12"/>
+                                    <TextBox x:Name="QualityText" Text="100" Width="56" Margin="7,0,0,0"/>
+                                </StackPanel>
+                                <Slider x:Name="QualitySlider" Margin="0,4,0,0" Minimum="50" Maximum="100" TickFrequency="10" IsSnapToTickEnabled="True" Value="100" ValueChanged="QualitySlider_ValueChanged"/>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                            <Border Padding="8" Background="#F7F9FC" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock Text="Watermark" FontWeight="Bold" FontSize="12"/>
+                                    <UniformGrid Columns="2" Margin="0,6,0,0">
+                                        <Button Content="Insert" Click="Insert_Click"/>
+                                        <Button Content="Reset" Click="ResetInsert_Click"/>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="0,8,0,0" Padding="8" Background="#F7F9FC" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock Text="Live Recording" FontWeight="Bold" FontSize="12"/>
+                                    <UniformGrid Columns="2" Margin="0,6,0,0">
+                                        <Button Content="Record Area" Click="RecordArea_Click"/>
+                                        <Button x:Name="RecordButton" Content="&#x25CF; Full Record" Foreground="#E11D48" FontWeight="Bold" Click="RecordToggle_Click"/>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                    <Border Margin="0,10,0,0" Padding="10" Background="#F7F9FC" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Output" FontWeight="Bold" FontSize="13"/>
+                            <UniformGrid Columns="3" Margin="0,7,0,0">
+                                <Button Content="Frame ZIP" Click="SaveZip_Click"/>
+                                <Button Content="GIF" Click="SaveGif_Click"/>
+                                <Button Content="WebP" Click="SaveWebp_Click"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
