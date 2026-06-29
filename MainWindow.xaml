@@ -102,6 +102,24 @@
                     <Button Content="+5s" Click="Forward5_Click"/>
                 </UniformGrid>
                 <StackPanel Grid.Row="6" Margin="0,16,0,0">
+                    <Border Padding="10,8" Margin="0,0,0,8" Background="#F7F9FC" BorderBrush="#DDE5EE" BorderThickness="1" CornerRadius="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Start" Foreground="#526174" FontSize="12" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="SelectedStartText" Text="00:00.000" FontFamily="Consolas" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="~" Margin="14,18,14,0" FontSize="18" FontWeight="Bold" Foreground="#6F7B8B"/>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="End" Foreground="#526174" FontSize="12" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="SelectedEndText" Text="00:00.000" FontFamily="Consolas" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
                     <UniformGrid Columns="2">
                         <Button Content="Set Start" Height="42" Click="SetStart_Click"/>
                         <Button Content="Set End" Height="42" Click="SetEnd_Click"/>
@@ -140,7 +158,13 @@
                         <TextBlock x:Name="ProgressText" Grid.Column="1" Text="-" Margin="10,0,0,0" Foreground="#596579" FontFamily="Consolas" VerticalAlignment="Center"/>
                     </Grid>
                 </StackPanel>
-                <ListView x:Name="FrameList" Grid.Row="1" Margin="0,14,0,0" SelectionMode="Extended" SelectionChanged="FrameList_SelectionChanged">
+                <ListView x:Name="FrameList" Grid.Row="1" Margin="0,14,0,0"
+                          SelectionMode="Extended"
+                          SelectionChanged="FrameList_SelectionChanged"
+                          ScrollViewer.CanContentScroll="True"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          VirtualizingPanel.ScrollUnit="Pixel">
                     <ListView.View>
                         <GridView>
                             <GridViewColumn Header="#" DisplayMemberBinding="{Binding Index}" Width="52"/>

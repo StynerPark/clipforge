@@ -16,6 +16,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -44,6 +45,7 @@ public partial class MainWindow : Window
     bool _updatingTimeline;
     bool _extracting;
     bool _muted = true;
+    bool _suppressFramePreview;
     int _loadSerial;
     int _stillSerial;
     CancellationTokenSource? _extractCancel;
@@ -395,6 +397,8 @@ public partial class MainWindow : Window
         StartText.Text = TimeText(_start);
         CurrentText.Text = TimeText(CurrentSeconds);
         EndText.Text = TimeText(_end);
+        SelectedStartText.Text = TimeText(_start);
+        SelectedEndText.Text = TimeText(_end);
         SegmentText.Text = $"Segment: {TimeText(_start)} ~ {TimeText(_end)}";
     }
 
@@ -428,7 +432,7 @@ public partial class MainWindow : Window
                 SetStatus($"Status: extracting {current:N0}/{expectedFrames:N0} frames");
                 SetProgress(current, expectedFrames, "");
             }, token), token);
-            AddFrames(files);
+            await AddFramesAsync(files);
             SetProgress(files.Length, Math.Max(expectedFrames, files.Length), "done");
             SetStatus($"Status: done {files.Length} frames");
         }
@@ -548,7 +552,7 @@ public partial class MainWindow : Window
             SetStatus("Status: recording stopped, no frames");
             return;
         }
-        AddRecordedFrames(files);
+        await AddRecordedFramesAsync(files);
         SetStatus($"Status: recording added {files.Length:N0} frames");
     }
 
@@ -606,10 +610,11 @@ public partial class MainWindow : Window
         return files;
     }
 
-    void AddFrames(string[] files)
+    async Task AddFramesAsync(string[] files)
     {
         var first = _frames.Count;
         var duration = (int)Math.Round(1000 / Math.Max(_fps, 1));
+        SetStatus($"Status: building frame list 0/{files.Length:N0}");
         for (var i = 0; i < files.Length; i++)
         {
             _frames.Add(new FrameItem
@@ -617,17 +622,24 @@ public partial class MainWindow : Window
                 Index = _frames.Count + 1,
                 Path = files[i],
                 Time = _start + i / Math.Max(_fps, 1),
-                Duration = duration,
-                Thumbnail = LoadBitmap(files[i], 90)
+                Duration = duration
             });
+            if (i % 150 == 0)
+            {
+                SetStatus($"Status: building frame list {i:N0}/{files.Length:N0}");
+                await Dispatcher.Yield(DispatcherPriority.Background);
+            }
         }
         if (_frames.Count > first) FrameList.SelectedIndex = first;
+        SetStatus($"Status: loading thumbnails 0/{files.Length:N0}");
+        _ = LoadThumbnailsAsync(first, files.Length);
     }
 
-    void AddRecordedFrames(string[] files)
+    async Task AddRecordedFramesAsync(string[] files)
     {
         var first = _frames.Count;
         var duration = (int)Math.Round(1000.0 / _recordFps);
+        SetStatus($"Status: building frame list 0/{files.Length:N0}");
         for (var i = 0; i < files.Length; i++)
         {
             _frames.Add(new FrameItem
@@ -635,16 +647,49 @@ public partial class MainWindow : Window
                 Index = _frames.Count + 1,
                 Path = files[i],
                 Time = i / (double)_recordFps,
-                Duration = duration,
-                Thumbnail = LoadBitmap(files[i], 90)
+                Duration = duration
             });
+            if (i % 150 == 0)
+            {
+                SetStatus($"Status: building frame list {i:N0}/{files.Length:N0}");
+                await Dispatcher.Yield(DispatcherPriority.Background);
+            }
         }
         _fps = _recordFps;
         if (_frames.Count > first) FrameList.SelectedIndex = first;
+        SetStatus($"Status: loading thumbnails 0/{files.Length:N0}");
+        _ = LoadThumbnailsAsync(first, files.Length);
+    }
+
+    async Task LoadThumbnailsAsync(int startIndex, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var index = startIndex + i;
+            if (index < 0 || index >= _frames.Count) break;
+            var frame = _frames[index];
+            try
+            {
+                var path = frame.Path;
+                var thumb = await Task.Run(() => LoadBitmap(path, 90));
+                if (index < _frames.Count && ReferenceEquals(_frames[index], frame))
+                {
+                    frame.Thumbnail = thumb;
+                }
+            }
+            catch { }
+
+            if (i % 100 == 0)
+            {
+                SetStatus($"Status: loading thumbnails {i:N0}/{count:N0}");
+                await Dispatcher.Yield(DispatcherPriority.Background);
+            }
+        }
     }
 
     void FrameList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressFramePreview) return;
         RefreshResultPreview();
     }
 
@@ -659,12 +704,21 @@ public partial class MainWindow : Window
 
     void ToggleSelect_Click(object sender, RoutedEventArgs e)
     {
-        if (FrameList.SelectedItems.Count == _frames.Count) FrameList.SelectedItems.Clear();
-        else
+        if (_frames.Count == 0) return;
+        var selectAll = FrameList.SelectedItems.Count != _frames.Count;
+        try
         {
-            FrameList.SelectedItems.Clear();
-            foreach (var f in _frames) FrameList.SelectedItems.Add(f);
+            Cursor = Cursors.Wait;
+            _suppressFramePreview = true;
+            if (selectAll) FrameList.SelectAll();
+            else FrameList.SelectedItems.Clear();
         }
+        finally
+        {
+            _suppressFramePreview = false;
+            Cursor = null;
+        }
+        Dispatcher.BeginInvoke(new Action(RefreshResultPreview), DispatcherPriority.Background);
     }
 
     void Duration_Click(object sender, RoutedEventArgs e)
@@ -672,9 +726,21 @@ public partial class MainWindow : Window
         var selected = FrameList.SelectedItems.Cast<FrameItem>().ToList();
         if (selected.Count == 0 && FrameList.SelectedItem is FrameItem cur) selected.Add(cur);
         if (selected.Count == 0) return;
-        var input = Microsoft.VisualBasic.Interaction.InputBox("Duration (ms)", "Change Duration", selected[0].Duration.ToString());
-        if (!int.TryParse(input, out var ms) || ms < 1) return;
-        foreach (var f in selected) f.Duration = ms;
+        var baseDuration = (int)Math.Max(1, Math.Round(1000 / Math.Max(_fps, 1)));
+        var dialog = new DurationDialog(_fps, baseDuration, selected[0].Duration) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        var ms = dialog.DurationMs;
+        try
+        {
+            Cursor = Cursors.Wait;
+            _suppressFramePreview = true;
+            foreach (var f in selected) f.Duration = ms;
+        }
+        finally
+        {
+            _suppressFramePreview = false;
+            Cursor = null;
+        }
         Renumber();
     }
 
@@ -1116,15 +1182,136 @@ public class FrameItem : INotifyPropertyChanged
 {
     int _index;
     int _duration;
+    BitmapImage? _thumbnail;
     public int Index { get => _index; set { _index = value; Changed(nameof(Index)); } }
     public required string Path { get; set; }
     public double Time { get; set; }
     public int Duration { get => _duration; set { _duration = value; Changed(nameof(Duration)); Changed(nameof(DurationText)); } }
-    public BitmapImage? Thumbnail { get; set; }
+    public BitmapImage? Thumbnail { get => _thumbnail; set { _thumbnail = value; Changed(nameof(Thumbnail)); } }
     public string TimeText => TimeSpan.FromSeconds(Time).ToString(@"mm\:ss\.fff", CultureInfo.InvariantCulture);
     public string DurationText => Duration + "ms";
     public event PropertyChangedEventHandler? PropertyChanged;
     void Changed(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+public class DurationDialog : Window
+{
+    readonly TextBox _durationBox = new();
+    readonly double _sourceDuration;
+    public int DurationMs { get; private set; }
+
+    public DurationDialog(double sourceFps, int sourceDurationMs, int currentDurationMs)
+    {
+        _sourceDuration = sourceFps > 0 ? 1000.0 / sourceFps : Math.Max(sourceDurationMs, 1);
+        DurationMs = Math.Max(currentDurationMs, 1);
+
+        Title = "Change Duration";
+        Width = 520;
+        Height = 260;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Background = Brushes.White;
+
+        var root = new Grid { Margin = new Thickness(18) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        var info = new TextBlock
+        {
+            Text = $"Source: {sourceFps:0.##} FPS  |  Original duration: {_sourceDuration:0.##} ms",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(68, 78, 96)),
+            Margin = new Thickness(0, 0, 0, 14)
+        };
+        root.Children.Add(info);
+
+        var presetGrid = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, 0, 16) };
+        Grid.SetRow(presetGrid, 1);
+        AddPreset(presetGrid, "Original", 1.0);
+        AddPreset(presetGrid, "2x", 0.5);
+        AddPreset(presetGrid, "0.5x", 2.0);
+        AddPreset(presetGrid, "4x", 0.25);
+        root.Children.Add(presetGrid);
+
+        var label = new TextBlock
+        {
+            Text = "Duration (ms)",
+            FontSize = 13,
+            Foreground = new SolidColorBrush(Color.FromRgb(68, 78, 96)),
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        Grid.SetRow(label, 2);
+        root.Children.Add(label);
+
+        _durationBox.Text = DurationMs.ToString(CultureInfo.InvariantCulture);
+        _durationBox.FontSize = 16;
+        _durationBox.Height = 36;
+        _durationBox.VerticalContentAlignment = VerticalAlignment.Center;
+        _durationBox.PreviewTextInput += (_, e) => e.Handled = !e.Text.All(char.IsDigit);
+        _durationBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) Confirm();
+            else if (e.Key == Key.Escape) DialogResult = false;
+        };
+        Grid.SetRow(_durationBox, 3);
+        root.Children.Add(_durationBox);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 18, 0, 0)
+        };
+        var ok = DialogButton("확인");
+        ok.Click += (_, _) => Confirm();
+        var cancel = DialogButton("취소");
+        cancel.Click += (_, _) => DialogResult = false;
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        Grid.SetRow(buttons, 4);
+        root.Children.Add(buttons);
+
+        Content = root;
+        Loaded += (_, _) =>
+        {
+            _durationBox.Focus();
+            _durationBox.SelectAll();
+        };
+    }
+
+    void AddPreset(Panel panel, string label, double multiplier)
+    {
+        var button = DialogButton(label);
+        button.Margin = new Thickness(0, 0, 8, 0);
+        button.Click += (_, _) => _durationBox.Text = Math.Max(1, (int)Math.Round(_sourceDuration * multiplier)).ToString(CultureInfo.InvariantCulture);
+        panel.Children.Add(button);
+    }
+
+    static Button DialogButton(string text) => new()
+    {
+        Content = text,
+        MinHeight = 34,
+        Padding = new Thickness(16, 4, 16, 4),
+        Margin = new Thickness(8, 0, 0, 0),
+        Background = new SolidColorBrush(Color.FromRgb(239, 243, 248)),
+        BorderBrush = new SolidColorBrush(Color.FromRgb(201, 213, 226)),
+        Foreground = Brushes.Black
+    };
+
+    void Confirm()
+    {
+        if (!int.TryParse(_durationBox.Text.Trim(), out var ms) || ms < 1)
+        {
+            MessageBox.Show(this, "1ms 이상의 숫자를 입력하세요.", "Change Duration", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        DurationMs = ms;
+        DialogResult = true;
+    }
 }
 
 public class OverlaySpec
@@ -1412,6 +1599,7 @@ public class CropWindow : Window
     bool _dragging;
     bool _moving;
     bool _resizing;
+    bool _hasSelection;
     double _ratio;
     public Rect CropRect { get; private set; }
 
@@ -1434,7 +1622,7 @@ public class CropWindow : Window
             buttons.Children.Add(b);
         }
         var apply = new Button { Content = "Apply", MinWidth = 96, Height = 36, FontWeight = FontWeights.Bold };
-        apply.Click += (_, _) => { CommitCrop(); DialogResult = true; };
+        apply.Click += (_, _) => { if (CommitCrop()) DialogResult = true; };
         buttons.Children.Add(apply);
 
         var view = new ScrollViewer { Content = _canvas, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -1449,12 +1637,16 @@ public class CropWindow : Window
         _canvas.Children.Add(_image);
         _canvas.Children.Add(_rect);
         _canvas.Children.Add(_resizeHandle);
+        _rect.Visibility = Visibility.Collapsed;
+        _resizeHandle.Visibility = Visibility.Collapsed;
         _resizeHandle.MouseLeftButtonDown += HandleDown;
         _resizeHandle.MouseMove += CanvasMove;
         _resizeHandle.MouseLeftButtonUp += CanvasUp;
 
-        var init = initial ?? new Rect(0, 0, _source.PixelWidth, _source.PixelHeight);
-        SetRect(new Rect(init.X * scale, init.Y * scale, init.Width * scale, init.Height * scale));
+        if (initial is Rect init)
+        {
+            SetRect(new Rect(init.X * scale, init.Y * scale, init.Width * scale, init.Height * scale));
+        }
         _canvas.MouseLeftButtonDown += CanvasDown;
         _canvas.MouseMove += CanvasMove;
         _canvas.MouseLeftButtonUp += CanvasUp;
@@ -1466,7 +1658,7 @@ public class CropWindow : Window
         var current = CurrentRect();
         _start = p;
         _last = p;
-        _moving = current.Contains(p);
+        _moving = _hasSelection && current.Contains(p);
         _dragging = !_moving;
         _resizing = false;
         if (_dragging) SetRect(new Rect(_start, new Size(1, 1)));
@@ -1510,6 +1702,7 @@ public class CropWindow : Window
 
     void HandleDown(object sender, MouseButtonEventArgs e)
     {
+        if (!_hasSelection) return;
         _resizing = true;
         _dragging = false;
         _moving = false;
@@ -1578,6 +1771,9 @@ public class CropWindow : Window
     void SetRect(Rect r)
     {
         r = FitRectToCanvas(r);
+        _hasSelection = true;
+        _rect.Visibility = Visibility.Visible;
+        _resizeHandle.Visibility = Visibility.Visible;
         Canvas.SetLeft(_rect, r.X);
         Canvas.SetTop(_rect, r.Y);
         _rect.Width = Math.Max(1, r.Width);
@@ -1614,11 +1810,17 @@ public class CropWindow : Window
         return new Rect(Canvas.GetLeft(_rect), Canvas.GetTop(_rect), _rect.Width, _rect.Height);
     }
 
-    void CommitCrop()
+    bool CommitCrop()
     {
+        if (!_hasSelection)
+        {
+            MessageBox.Show(this, "자를 영역을 먼저 선택하세요.", "Crop Selection", MessageBoxButton.OK, MessageBoxImage.Information);
+            return false;
+        }
         var sx = _source.PixelWidth / _canvas.Width;
         var sy = _source.PixelHeight / _canvas.Height;
         CropRect = new Rect(Canvas.GetLeft(_rect) * sx, Canvas.GetTop(_rect) * sy, _rect.Width * sx, _rect.Height * sy);
+        return true;
     }
 
     static BitmapSource MainWindowLoadBitmap(string path)
